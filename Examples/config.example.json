@@ -1,0 +1,24 @@
+{
+  "enabled": false,
+  "schedule": {
+    "hour": 2,
+    "minute": 30
+  },
+  "archive": {
+    "basePath": "~/Archive/Quarantine"
+  },
+  "roots": [
+    {
+      "name": "downloads",
+      "path": "~/Downloads",
+      "retentionDays": 30,
+      "action": "trash"
+    },
+    {
+      "name": "scratch",
+      "path": "~/scratch",
+      "retentionDays": 7,
+      "action": "archive"
+    }
+  ]
+}

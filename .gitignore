@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Xcode user-specific files
+**/xcuserdata/
+*.xcuserstate
+
+# Xcode build artifacts
+DerivedData/
+build/
+.build/
+dist/
+*.xcarchive
+*.xcresult
+*.dSYM
+
+# Coverage / profiling
+*.profraw
+*.profdata
+
+# Swift Package Manager
+.swiftpm/

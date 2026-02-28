@@ -1,24 +1,13 @@
-//
-//  ContentView.swift
-//  Fluxus
-//
-//  Created by Pierre joly on 26/02/2026.
-//
-
 import SwiftUI
 
 struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
-    }
-}
+    @ObservedObject var viewModel: FluxusViewModel
 
-#Preview {
-    ContentView()
+    var body: some View {
+        if viewModel.hasAcknowledgedWarning {
+            MainDashboardView(viewModel: viewModel)
+        } else {
+            FirstRunView(viewModel: viewModel)
+        }
+    }
 }
