@@ -12,6 +12,8 @@ extension FluxusViewModel {
         defer { isBusy = false }
 
         do {
+            let configPath = FluxusViewModelConstants.configPath
+            let previousConfig = try? ConfigStore.loadConfig(from: configPath)
             let requestedEnabled = config.enabled
             var normalizedConfig = try FluxusConfigNormalizer.normalize(
                 config,
@@ -24,7 +26,6 @@ extension FluxusViewModel {
                 normalizedConfig.enabled = false
             }
 
-            let configPath = FluxusViewModelConstants.configPath
             try ConfigStore.save(config: normalizedConfig, to: configPath)
             config = normalizedConfig
 
@@ -35,6 +36,10 @@ extension FluxusViewModel {
                 schedule: normalizedConfig.schedule,
                 enabled: normalizedConfig.canSchedule
             )
+
+            if shouldMarkPolicyActivation(previous: previousConfig, next: normalizedConfig) {
+                try ConfigStore.markPolicyActivated()
+            }
 
             refreshLaunchAgentStatus()
             if autoDisabledNoTargets {
@@ -125,5 +130,23 @@ extension FluxusViewModel {
         } catch {
             setStatus("No history report found.", isError: true)
         }
+    }
+}
+
+private extension FluxusViewModel {
+    func shouldMarkPolicyActivation(previous: FluxusConfig?, next: FluxusConfig) -> Bool {
+        guard next.canSchedule else {
+            return false
+        }
+
+        guard let previous else {
+            return true
+        }
+
+        if !previous.canSchedule {
+            return true
+        }
+
+        return previous.schedule != next.schedule
     }
 }

@@ -92,7 +92,7 @@ dist/Fluxus.app
 dist/Fluxus.app.dSYM
 ```
 
-Optional: copy directly to `/Applications`:
+Copy directly to `/Applications`:
 
 ```bash
 ./scripts/build-release.sh --install
@@ -139,10 +139,21 @@ You must add targets yourself (folder path + max file age + action).
 When enabled, `launchd` runs:
 
 ```text
-Fluxusctl --run --config <path>
+Fluxusctl --run-if-missed --config <path>
 ```
 
-at the configured hour/minute.
+at login (`RunAtLoad`) and at the configured hour/minute.
+
+`--run-if-missed` behavior:
+
+- Compute whether a scheduled run was missed since the latest anchor:
+  - `max(last_run.startedAt, scheduler_state.policyActivatedAt)`.
+- If a run was missed, execute one cleanup run immediately.
+- If not missed, skip with no file changes.
+- First history file creation (`last_run.json` absent) does not imply a missed run by itself.
+- If schedule/enabled policy was just changed, catch-up starts from that activation time (no retroactive immediate delete).
+- If `scheduler_state.json` is missing/corrupt, Fluxus initializes it to "now" and skips this invocation.
+- If `last_run.json` is corrupt, Fluxus clears it, resets policy anchor to "now", and skips this invocation.
 
 For each configured root:
 
@@ -154,12 +165,13 @@ For each configured root:
 - Never remove the root directory itself.
 - Do not follow symlinks.
 - Do not process outside configured roots.
-- Exclusions are not applied.
 
 ## Runtime Files
 
 - Config: `~/Library/Application Support/Fluxus/config.json`
 - History report: `~/Library/Application Support/Fluxus/last_run.json`
+- Scheduler state: `~/Library/Application Support/Fluxus/scheduler_state.json`
+- Run lock: `~/Library/Application Support/Fluxus/cleanup.lock`
 - Log: `~/Library/Logs/Fluxus/cleanup.log`
 - LaunchAgent plist: `~/Library/LaunchAgents/com.pierre.Fluxus.plist`
 
@@ -170,10 +182,11 @@ Fluxus manages a user LaunchAgent with:
 - Label: `com.pierre.Fluxus`
 - ProgramArguments:
   - `<app bundle>/Contents/MacOS/Fluxusctl`
-  - `--run`
+  - `--run-if-missed`
   - `--config`
   - `~/Library/Application Support/Fluxus/config.json`
 - `StartCalendarInterval` from configured `hour` / `minute`
+- `RunAtLoad` enabled
 - `StandardOutPath` and `StandardErrorPath` to `~/Library/Logs/Fluxus/cleanup.log`
 
 Fluxus applies changes with:
@@ -189,6 +202,7 @@ If automation is disabled, or if there are no targets, Fluxus automatically remo
 Fluxusctl --validate --config <path>
 Fluxusctl --simulate --config <path>
 Fluxusctl --run --config <path>
+Fluxusctl --run-if-missed --config <path>
 ```
 
 All commands emit machine-readable JSON on stdout.

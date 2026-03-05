@@ -22,6 +22,14 @@ enum FluxusPaths {
         appSupportDirectory.appendingPathComponent("last_run.json")
     }
 
+    static var schedulerStateURL: URL {
+        appSupportDirectory.appendingPathComponent("scheduler_state.json")
+    }
+
+    static var runLockURL: URL {
+        appSupportDirectory.appendingPathComponent("cleanup.lock")
+    }
+
     static var logsDirectory: URL {
         homeDirectory
             .appendingPathComponent("Library", isDirectory: true)

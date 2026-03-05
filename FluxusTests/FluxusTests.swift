@@ -424,6 +424,102 @@ final class FluxusTests: XCTestCase {
         XCTAssertTrue(output.errors.contains(where: { $0.message.contains("does not exist") }))
     }
 
+    func testMissedSchedulePolicySkipsWhenNextRunNotDueYet() {
+        let calendar = utcCalendar()
+        let policyActivatedAt = makeUTCDate(year: 2026, month: 3, day: 5, hour: 9, minute: 0)
+        let now = makeUTCDate(year: 2026, month: 3, day: 5, hour: 9, minute: 15)
+
+        let decision = MissedSchedulePolicy.evaluate(
+            now: now,
+            schedule: ScheduleConfig(hour: 23, minute: 0),
+            lastRunAt: nil,
+            policyActivatedAt: policyActivatedAt,
+            calendar: calendar
+        )
+
+        XCTAssertFalse(decision.shouldRun)
+        XCTAssertEqual(decision.reason, .notDueYet)
+        XCTAssertEqual(decision.anchorAt, policyActivatedAt)
+        XCTAssertEqual(decision.dueAt, makeUTCDate(year: 2026, month: 3, day: 5, hour: 23, minute: 0))
+    }
+
+    func testMissedSchedulePolicyRunsWhenRunWasMissedAfterStartup() {
+        let calendar = utcCalendar()
+        let policyActivatedAt = makeUTCDate(year: 2026, month: 3, day: 4, hour: 8, minute: 0)
+        let now = makeUTCDate(year: 2026, month: 3, day: 5, hour: 10, minute: 0)
+
+        let decision = MissedSchedulePolicy.evaluate(
+            now: now,
+            schedule: ScheduleConfig(hour: 2, minute: 30),
+            lastRunAt: nil,
+            policyActivatedAt: policyActivatedAt,
+            calendar: calendar
+        )
+
+        XCTAssertTrue(decision.shouldRun)
+        XCTAssertEqual(decision.reason, .due)
+        XCTAssertEqual(decision.anchorAt, policyActivatedAt)
+        XCTAssertEqual(decision.dueAt, makeUTCDate(year: 2026, month: 3, day: 5, hour: 2, minute: 30))
+    }
+
+    func testMissedSchedulePolicyDoesNotRunImmediatelyAfterScheduleChange() {
+        let calendar = utcCalendar()
+        let lastRunAt = makeUTCDate(year: 2026, month: 3, day: 5, hour: 8, minute: 0)
+        let policyActivatedAt = makeUTCDate(year: 2026, month: 3, day: 5, hour: 15, minute: 0)
+        let now = makeUTCDate(year: 2026, month: 3, day: 5, hour: 16, minute: 0)
+
+        let decision = MissedSchedulePolicy.evaluate(
+            now: now,
+            schedule: ScheduleConfig(hour: 14, minute: 0),
+            lastRunAt: lastRunAt,
+            policyActivatedAt: policyActivatedAt,
+            calendar: calendar
+        )
+
+        XCTAssertFalse(decision.shouldRun)
+        XCTAssertEqual(decision.reason, .notDueYet)
+        XCTAssertEqual(decision.anchorAt, policyActivatedAt)
+        XCTAssertEqual(decision.dueAt, makeUTCDate(year: 2026, month: 3, day: 6, hour: 14, minute: 0))
+    }
+
+    func testMissedSchedulePolicySkipsWhenPolicyAnchorMissing() {
+        let calendar = utcCalendar()
+        let now = makeUTCDate(year: 2026, month: 3, day: 5, hour: 10, minute: 0)
+
+        let decision = MissedSchedulePolicy.evaluate(
+            now: now,
+            schedule: ScheduleConfig(hour: 2, minute: 30),
+            lastRunAt: nil,
+            policyActivatedAt: nil,
+            calendar: calendar
+        )
+
+        XCTAssertFalse(decision.shouldRun)
+        XCTAssertEqual(decision.reason, .missingPolicyAnchor)
+        XCTAssertNil(decision.anchorAt)
+        XCTAssertNil(decision.dueAt)
+    }
+
+    func testMissedSchedulePolicyUsesLastRunWhenMoreRecentThanPolicyAnchor() {
+        let calendar = utcCalendar()
+        let policyActivatedAt = makeUTCDate(year: 2026, month: 3, day: 1, hour: 9, minute: 0)
+        let lastRunAt = makeUTCDate(year: 2026, month: 3, day: 5, hour: 2, minute: 30)
+        let now = makeUTCDate(year: 2026, month: 3, day: 5, hour: 20, minute: 0)
+
+        let decision = MissedSchedulePolicy.evaluate(
+            now: now,
+            schedule: ScheduleConfig(hour: 2, minute: 30),
+            lastRunAt: lastRunAt,
+            policyActivatedAt: policyActivatedAt,
+            calendar: calendar
+        )
+
+        XCTAssertFalse(decision.shouldRun)
+        XCTAssertEqual(decision.reason, .notDueYet)
+        XCTAssertEqual(decision.anchorAt, lastRunAt)
+        XCTAssertEqual(decision.dueAt, makeUTCDate(year: 2026, month: 3, day: 6, hour: 2, minute: 30))
+    }
+
     private func makeTemporaryDirectory(named prefix: String) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(prefix)-\(UUID().uuidString)", isDirectory: true)
@@ -460,5 +556,34 @@ final class FluxusTests: XCTestCase {
         let data = try Data(contentsOf: fileURL)
         XCTAssertGreaterThanOrEqual(data.count, 4)
         return Array(data.prefix(4))
+    }
+
+    private func utcCalendar() -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        return calendar
+    }
+
+    private func makeUTCDate(
+        year: Int,
+        month: Int,
+        day: Int,
+        hour: Int,
+        minute: Int
+    ) -> Date {
+        let calendar = utcCalendar()
+        let components = DateComponents(
+            timeZone: TimeZone(secondsFromGMT: 0),
+            year: year,
+            month: month,
+            day: day,
+            hour: hour,
+            minute: minute
+        )
+
+        guard let date = calendar.date(from: components) else {
+            fatalError("Unable to create date from components \(components)")
+        }
+        return date
     }
 }

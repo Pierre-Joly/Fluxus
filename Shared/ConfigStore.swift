@@ -37,4 +37,20 @@ enum ConfigStore {
         let data = try FluxusJSON.encoder.encode(output)
         try data.write(to: FluxusPaths.lastRunURL, options: .atomic)
     }
+
+    static func loadSchedulerState() throws -> SchedulerState {
+        let data = try Data(contentsOf: FluxusPaths.schedulerStateURL)
+        return try FluxusJSON.decoder.decode(SchedulerState.self, from: data)
+    }
+
+    static func saveSchedulerState(_ state: SchedulerState) throws {
+        try FluxusPaths.ensureParentDirectory(for: FluxusPaths.schedulerStateURL)
+        let data = try FluxusJSON.encoder.encode(state)
+        try data.write(to: FluxusPaths.schedulerStateURL, options: .atomic)
+    }
+
+    static func markPolicyActivated(at date: Date = Date()) throws {
+        let state = SchedulerState(policyActivatedAt: FluxusJSON.isoString(date))
+        try saveSchedulerState(state)
+    }
 }

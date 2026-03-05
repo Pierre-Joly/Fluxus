@@ -113,7 +113,7 @@ struct LaunchAgentManager {
             "Label": FluxusPaths.launchAgentLabel,
             "ProgramArguments": [
                 helperPath,
-                "--run",
+                "--run-if-missed",
                 "--config",
                 configPath
             ],
@@ -123,7 +123,7 @@ struct LaunchAgentManager {
             ],
             "StandardOutPath": logPath,
             "StandardErrorPath": logPath,
-            "RunAtLoad": false
+            "RunAtLoad": true
         ]
     }
 

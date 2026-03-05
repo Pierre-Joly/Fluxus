@@ -131,6 +131,10 @@ struct FluxusConfig: Codable, Hashable {
     }
 }
 
+struct SchedulerState: Codable, Hashable {
+    var policyActivatedAt: String
+}
+
 struct CandidateRecord: Codable, Hashable, Identifiable {
     var rootName: String
     var action: CleanupAction
@@ -281,6 +285,12 @@ enum FluxusJSON {
         return formatter
     }()
 
+    private static let fallbackISOFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
     static var encoder: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -293,5 +303,101 @@ enum FluxusJSON {
 
     static func isoString(_ date: Date) -> String {
         isoFormatter.string(from: date)
+    }
+
+    static func parseISODate(_ value: String) -> Date? {
+        if let date = isoFormatter.date(from: value) {
+            return date
+        }
+        return fallbackISOFormatter.date(from: value)
+    }
+}
+
+struct MissedScheduleRunDecision: Hashable {
+    let shouldRun: Bool
+    let anchorAt: Date?
+    let dueAt: Date?
+    let reason: MissedScheduleRunReason
+}
+
+enum MissedScheduleRunReason: String, Codable {
+    case due
+    case invalidSchedule
+    case missingPolicyAnchor
+    case notDueYet
+}
+
+enum MissedSchedulePolicy {
+    static func evaluate(
+        now: Date,
+        schedule: ScheduleConfig,
+        lastRunAt: Date?,
+        policyActivatedAt: Date?,
+        calendar: Calendar = .current
+    ) -> MissedScheduleRunDecision {
+        guard schedule.isValid else {
+            return MissedScheduleRunDecision(
+                shouldRun: false,
+                anchorAt: nil,
+                dueAt: nil,
+                reason: .invalidSchedule
+            )
+        }
+
+        guard let policyActivatedAt else {
+            return MissedScheduleRunDecision(
+                shouldRun: false,
+                anchorAt: nil,
+                dueAt: nil,
+                reason: .missingPolicyAnchor
+            )
+        }
+
+        let anchorAt = max(policyActivatedAt, lastRunAt ?? .distantPast)
+
+        guard let dueAt = firstScheduledDate(
+            after: anchorAt,
+            schedule: schedule,
+            calendar: calendar
+        ) else {
+            return MissedScheduleRunDecision(
+                shouldRun: false,
+                anchorAt: anchorAt,
+                dueAt: nil,
+                reason: .invalidSchedule
+            )
+        }
+
+        let shouldRun = dueAt <= now
+        return MissedScheduleRunDecision(
+            shouldRun: shouldRun,
+            anchorAt: anchorAt,
+            dueAt: dueAt,
+            reason: shouldRun ? .due : .notDueYet
+        )
+    }
+
+    static func firstScheduledDate(
+        after anchorAt: Date,
+        schedule: ScheduleConfig,
+        calendar: Calendar = .current
+    ) -> Date? {
+        guard schedule.isValid else {
+            return nil
+        }
+
+        let components = DateComponents(
+            hour: schedule.hour,
+            minute: schedule.minute,
+            second: 0
+        )
+
+        return calendar.nextDate(
+            after: anchorAt,
+            matching: components,
+            matchingPolicy: .nextTime,
+            repeatedTimePolicy: .first,
+            direction: .forward
+        )
     }
 }
